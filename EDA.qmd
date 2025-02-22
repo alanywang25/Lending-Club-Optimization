@@ -1,0 +1,36 @@
+
+### EDA
+
+```{r load-libraries}
+library(tidyverse)
+```
+
+```{r load-data}
+loans = read.csv("loans_full_schema.csv")
+```
+
+```{r debt-income-interest-rate}
+ggplot(loans, aes(x = debt_to_income, y = interest_rate, color = grade)) +
+  geom_point() +
+  labs(x = "Debt to Income Ratio",
+       y = "Loan Interest Rate (%)",
+       title = "Loan Interest Rate vs. Loanee Debt to Income Ratio",
+       subtitle = "By Loan Grade")
+```
+
+```{r loan-grade-purposes}
+ggplot(loans, aes(x = grade, fill = loan_purpose)) +
+  geom_bar(position = "fill") +
+  labs(x = "Loan Grade",
+       y = "Proportion",
+       title = "Distribution of Loan Purposes",
+       subtitle = "by Loan Grade")
+```
+
+```{r interest-rates-by-grade}
+ggplot(loans, aes(x = interest_rate)) +
+  geom_histogram(fill = "blue", color = "black") +
+  facet_wrap(~ grade, scales = "free_y") +  # Separate panel for each level of A
+  labs(title = "Distribution of Loan Interest Rates by Loan Grade", x = "Interest Rate (%)", y = "Count") +
+  theme_minimal()
+```
