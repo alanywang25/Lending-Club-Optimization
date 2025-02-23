@@ -1,12 +1,28 @@
-
 ### EDA
 
 ```{r load-libraries}
 library(tidyverse)
+library(zoo)
 ```
 
 ```{r load-data}
 loans = read.csv("loans_full_schema.csv")
+```
+
+```{r data-cleaning}
+# Set variable types
+loans <- loans |> 
+  mutate(state = factor(state),
+         homeownership = factor(homeownership),
+         verified_income = factor(verified_income),
+         loan_purpose = factor(loan_purpose),
+         application_type = factor(application_type),
+         grade = factor(grade),
+         sub_grade = factor(sub_grade),
+         issue_month = as.yearmon(issue_month, format = "%b-%Y"),
+         loan_status = factor(loan_status),
+         initial_listing_status = factor(initial_listing_status),
+         disbursement_method = factor(disbursement_method))
 ```
 
 ```{r debt-income-interest-rate}
@@ -32,5 +48,29 @@ ggplot(loans, aes(x = interest_rate)) +
   geom_histogram(fill = "blue", color = "black") +
   facet_wrap(~ grade, scales = "free_y") +  # Separate panel for each level of A
   labs(title = "Distribution of Loan Interest Rates by Loan Grade", x = "Interest Rate (%)", y = "Count") +
+  theme_minimal()
+```
+
+```{r warning=FALSE}
+ggplot(loans, aes(x=annual_income/1000, y=interest_rate, 
+                  color=verified_income)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se=FALSE) + 
+  labs(title="Interest Rate vs Annual Income by Income Verification",
+       x="Annual Income (in $1000s)", 
+       y="Interest Rate (%)",
+       color="Income Verification") + 
+  scale_y_continuous(limits = c(5, 30), breaks = seq(5, 30, by = 5)) + 
+  theme_minimal()
+```
+
+```{r warning=FALSE}
+ggplot(loans, aes(x=issue_month)) +
+  geom_histogram(stat="count", bins=3, fill="darkblue") + 
+  geom_text(stat = "count", aes(label = after_stat(count)), 
+            vjust = -0.5, color = "black", size = 4) +
+  labs(title="Distribution of Loans by Issue Month",
+       x="Issue Month",
+       y="Count") + 
   theme_minimal()
 ```
