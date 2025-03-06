@@ -2,7 +2,9 @@
 
 ```{r load-libraries}
 library(tidyverse)
+library(tidymodels)
 library(zoo)
+library(knitr)
 ```
 
 ```{r load-data}
@@ -73,4 +75,42 @@ ggplot(loans, aes(x=issue_month)) +
        x="Issue Month",
        y="Count") + 
   theme_minimal()
+```
+
+### Multivariate Linear Regression
+
+```{r regression-model}
+lend_model = lm(interest_rate ~ debt_to_income + loan_amount + term + grade + 
+                  num_satisfactory_accounts + account_never_delinq_percent +
+                  public_record_bankrupt, data = loans)
+
+model_output = tidy(lend_model) 
+
+for(i in 1:nrow(model_output)) {
+  if(as.numeric(model_output$p.value[i]) < 0.001) {
+    model_output$p.value[i] = "< 0.001"
+  } else {
+    model_output$p.value[i] = round(as.numeric(model_output$p.value[i]), 3)
+  } 
+}
+
+# customize variables so that there are no raw variable outputs
+# model_output <- as.data.frame(model_output)
+# 
+# row_names = c("")
+# 
+# rownames(model_output) <- row_names
+# 
+# model_output <- model_output |> 
+#   select(-term)
+
+model_output |>
+  kable(
+    col.names = c("Term", "Estimate", "Standard Error", "Statistic", "P-value"),
+    digits = 3)
+```
+
+```{r assess-model-performance}
+glance(lend_model)$r.squared
+glance(lend_model)$adj.r.squared
 ```
