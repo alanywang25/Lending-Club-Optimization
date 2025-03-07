@@ -1,22 +1,27 @@
 ### EDA
 
-```{r load-libraries}
+```{r load-libraries, message=FALSE}
 library(tidyverse)
 library(tidymodels)
 library(zoo)
 library(knitr)
-```
-
-```{r load-data}
-loans = read.csv("loans_full_schema.csv")
+library(mice)
+library(kableExtra)
 ```
 
 ```{r data-cleaning}
+loans = read.csv("loans_full_schema.csv")
+
 # Set variable types
 loans <- loans |> 
   mutate(state = factor(state),
          homeownership = factor(homeownership),
          verified_income = factor(verified_income),
+         verification_income_joint = factor(na_if(verification_income_joint, 
+                                                  "")), 
+         months_since_last_delinq = replace_na(months_since_last_delinq, 0),
+         months_since_90d_late = replace_na(months_since_90d_late, 0),
+         months_since_last_credit_inquiry = replace_na(months_since_last_credit_inquiry, 0),
          loan_purpose = factor(loan_purpose),
          application_type = factor(application_type),
          grade = factor(grade),
@@ -25,6 +30,52 @@ loans <- loans |>
          loan_status = factor(loan_status),
          initial_listing_status = factor(initial_listing_status),
          disbursement_method = factor(disbursement_method))
+
+# Get annual income & verification for individual & joint accounts
+# If verification is NA for joint, use individual verification
+loans <- loans |> 
+  mutate(income_final = ifelse(application_type == "individual", 
+                               annual_income, annual_income_joint),
+         verification_final = ifelse(application_type == "individual", 
+                                     as.character(verified_income), 
+                                     as.character(verification_income_joint)),
+         verification_final = ifelse(is.na(verification_final), 
+                                     as.character(verified_income), 
+                                     verification_final),
+         verification_final = factor(verification_final), 
+         debt_to_income_final = ifelse(application_type == "individual", 
+                                       debt_to_income, debt_to_income_joint)
+         )
+
+# Get df with relevant columns
+# num_accounts_120d_past_due, num_accounts_30d_past_due had all 0s
+# Can't use stuff paid (occured after interest rate was assigned)
+loans_filtered <- loans |> 
+  select(-c(emp_title, annual_income, verified_income, debt_to_income,
+            annual_income_joint, verification_income_joint, 
+            debt_to_income_joint, num_accounts_120d_past_due,
+            num_accounts_30d_past_due, paid_total, paid_principal, 
+            paid_interest, paid_late_fees))
+
+sum(is.na(loans_filtered))
+
+# Find num variables correlated with emp_length
+numeric_vars <- loans_filtered[sapply(loans_filtered, is.numeric)]
+cor_matrix <- cor(numeric_vars, use = "pairwise.complete.obs")
+
+# MICE imputation
+imputed_emp_length <- mice(loans_filtered[, c("emp_length", 
+                                              "num_mort_accounts",
+                                              "num_total_cc_accounts",
+                                              "earliest_credit_line")], 
+                     method = "pmm", m = 5, maxit = 50, seed = 123,
+                     printFlag=FALSE)
+
+completed_emp_length <- complete(imputed_emp_length)
+
+# Update emp_length
+loans_filtered$emp_length <- completed_emp_length$emp_length
+sum(is.na(loans_filtered))
 ```
 
 ```{r debt-income-interest-rate}
@@ -54,8 +105,8 @@ ggplot(loans, aes(x = interest_rate)) +
 ```
 
 ```{r warning=FALSE}
-ggplot(loans, aes(x=annual_income/1000, y=interest_rate, 
-                  color=verified_income)) + 
+ggplot(loans_filtered, aes(x=income_final/1000, y=interest_rate, 
+                  color=verification_final)) + 
   geom_point() + 
   geom_smooth(method = "lm", se=FALSE) + 
   labs(title="Interest Rate vs Annual Income by Income Verification",
@@ -67,7 +118,7 @@ ggplot(loans, aes(x=annual_income/1000, y=interest_rate,
 ```
 
 ```{r warning=FALSE}
-ggplot(loans, aes(x=issue_month)) +
+ggplot(loans_filtered, aes(x=issue_month)) +
   geom_histogram(stat="count", bins=3, fill="darkblue") + 
   geom_text(stat = "count", aes(label = after_stat(count)), 
             vjust = -0.5, color = "black", size = 4) +
@@ -79,7 +130,7 @@ ggplot(loans, aes(x=issue_month)) +
 
 ### Multivariate Linear Regression
 
-```{r regression-model}
+```{r regression-model, message=FALSE}
 lend_model = lm(interest_rate ~ debt_to_income + loan_amount + term + grade + 
                   num_satisfactory_accounts + account_never_delinq_percent +
                   public_record_bankrupt, data = loans)
@@ -104,13 +155,71 @@ for(i in 1:nrow(model_output)) {
 # model_output <- model_output |> 
 #   select(-term)
 
-model_output |>
-  kable(
+kbl(model_output,
     col.names = c("Term", "Estimate", "Standard Error", "Statistic", "P-value"),
-    digits = 3)
+    digits = 3,
+    booktabs = T) |> 
+  kable_styling(latex_options = c("striped", "hold_position"))
 ```
 
 ```{r assess-model-performance}
 glance(lend_model)$r.squared
 glance(lend_model)$adj.r.squared
+```
+
+## Lasso Regression
+
+```{r lasso, message=FALSE}
+library(glmnet)
+grid <- 10^seq(10, -2, length = 100)
+
+loans_x <- model.matrix(interest_rate~., loans_filtered)[,-1]
+loans_y <- loans_filtered$interest_rate
+
+set.seed(123)
+train <- sample(1:nrow(loans_x), nrow(loans_x)/2)
+test <- (-train)
+y.test <- loans_y[test]
+
+lasso.mod <- glmnet(loans_x[train,], loans_y[train], 
+                    alpha = 1, lambda = grid)
+plot(lasso.mod)
+```
+
+```{r cross-validation}
+set.seed(123)
+cv.out <- cv.glmnet(loans_x[train,], loans_y[train], alpha = 1)
+plot(cv.out)
+bestlam <- cv.out$lambda.min
+lasso.pred <- predict(lasso.mod, s = bestlam, newx = loans_x[test,])
+
+# Find SST and SSE
+sst <- sum((y.test - mean(y.test))^2)
+sse <- sum((lasso.pred - y.test)^2)
+
+# Find R-Squared
+rsq <- 1 - sse/sst
+
+# Find MSE
+mse <- mean((lasso.pred - y.test)^2)
+
+cat("Training MSE: ", mse, "\n")
+cat("Training R-Squared: ", mse, "\n")
+```
+
+MSE is 0.062.
+
+```{r lasso-final-model}
+out <- glmnet(loans_x, loans_y, alpha = 1, lambda = grid)
+lasso.coef <- predict(out, type = "coefficients", s = bestlam)
+lasso_coef_matrix <- as.matrix(lasso.coef)
+
+lasso_coef_df <- data.frame(Predictor = rownames(lasso_coef_matrix),
+                            Coefficient = lasso_coef_matrix[, 1], 
+                            row.names = NULL)
+lasso_sig_df <- lasso_coef_df[lasso_coef_df$Coefficient != 0, ]
+rownames(lasso_sig_df) <- NULL
+
+kbl(lasso_sig_df, digits = 4, booktabs = T) |> 
+  kable_styling(latex_options = c("striped", "hold_position"))
 ```
