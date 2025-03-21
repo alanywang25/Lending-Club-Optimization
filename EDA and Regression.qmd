@@ -203,8 +203,8 @@ rsq <- 1 - sse/sst
 # Find MSE
 mse <- mean((lasso.pred - y.test)^2)
 
-cat("Training MSE: ", mse, "\n")
-cat("Training R-Squared: ", mse, "\n")
+cat("MSE: ", mse, "\n")
+cat("R-Squared: ", rsq, "\n")
 ```
 
 MSE is 0.062.
