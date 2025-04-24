@@ -130,6 +130,17 @@ ggplot(loans_filtered, aes(x=issue_month)) +
 
 ### Multivariate Linear Regression
 
+$$
+\begin{aligned}
+&\text{interest_rate}_i = 6.755 + 0.004 \times \text{debt_to_income}_i - (3.4 \times 10^{-6})\times \text{loan_amount}_i \\
+&+0.007 \times \text{term}_i + 3.726 \times (\text{loan_grade}_i = B) + 7.353 \times (\text{loan_grade}_i = C) \\
+&+ 12.720 \times (\text{loan_grade}_i = D) + 18.222 \times (\text{loan_grade}_i = E) + 22.502 \times (\text{loan_grade}_i = F) \\
+&+ 23.930 \times (\text{loan_grade}_i = G) - 0.003 \times \text{num_satisfactory_accounts}_i \\
+&- 0.003 \times \text{account_never_delinq_percent}_i + 0.041 \times \text{public_record_bankrupt}_i + \epsilon_i, \\
+&\text{where } \epsilon_i \sim N(0, \sigma_{\epsilon}^2)
+\end{aligned}
+$$
+
 ```{r regression-model, message=FALSE}
 lend_model = lm(interest_rate ~ debt_to_income + loan_amount + term + grade + 
                   num_satisfactory_accounts + account_never_delinq_percent +
@@ -138,11 +149,11 @@ lend_model = lm(interest_rate ~ debt_to_income + loan_amount + term + grade +
 model_output = tidy(lend_model) 
 
 for(i in 1:nrow(model_output)) {
-  if(as.numeric(model_output$p.value[i]) < 0.001) {
+  if(abs(as.numeric(model_output$p.value[i])) < 0.001) {
     model_output$p.value[i] = "< 0.001"
   } else {
     model_output$p.value[i] = round(as.numeric(model_output$p.value[i]), 3)
-  } 
+  }
 }
 
 # customize variables so that there are no raw variable outputs
@@ -157,7 +168,6 @@ for(i in 1:nrow(model_output)) {
 
 kbl(model_output,
     col.names = c("Term", "Estimate", "Standard Error", "Statistic", "P-value"),
-    digits = 3,
     booktabs = T) |> 
   kable_styling(latex_options = c("striped", "hold_position"))
 ```
