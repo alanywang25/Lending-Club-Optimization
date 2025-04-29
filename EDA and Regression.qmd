@@ -76,6 +76,12 @@ completed_emp_length <- complete(imputed_emp_length)
 # Update emp_length
 loans_filtered$emp_length <- completed_emp_length$emp_length
 sum(is.na(loans_filtered))
+
+write.csv(loans_filtered, "loans_filtered.csv")
+```
+
+```{r}
+0.3 * loans_filtered$interest_rate
 ```
 
 ```{r debt-income-interest-rate}
