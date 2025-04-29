@@ -233,3 +233,61 @@ rownames(lasso_sig_df) <- NULL
 kbl(lasso_sig_df, digits = 4, booktabs = T) |> 
   kable_styling(latex_options = c("striped", "hold_position"))
 ```
+
+```{r}
+loans_filtered |> 
+  group_by(disbursement_method) |> 
+  summarize(mean_interest = mean(interest_rate),
+            count = n())
+
+table(loans_filtered$loan_status)
+```
+
+```{r}
+# 2. Create a binary default flag
+loans$default <- ifelse(loans$loan_status == "Charged Off", 1, 0)
+
+# 3. Select a handful of predictors
+#    (you can expand this list as you like)
+vars <- c("loan_amount",
+          "term",
+          "interest_rate",
+          "annual_income",
+          "debt_to_income",
+          "grade")
+
+model_data <- loans[ , c(vars, "default")]
+
+# 4. Clean / factor any categorical variables
+model_data$grade <- factor(model_data$grade)
+
+# 5. (Optional) Drop rows with NAs in these cols
+model_data <- na.omit(model_data)
+
+# 6. Split into training and test sets
+set.seed(42)
+train_ix <- sample(seq_len(nrow(model_data)), size = 0.7 * nrow(model_data))
+train_df <- model_data[train_ix, ]
+test_df  <- model_data[-train_ix, ]
+
+# 7. Fit a logistic‐regression model
+fit <- glm(default ~ ., 
+           data   = train_df, 
+           family = binomial(link = "logit"))
+
+# 8. Predict default probability on *all* loans
+#    (you can use model_data, or the full 'loans' if you want NAs back in)
+pd_all <- predict(fit, newdata = model_data, type = "response")
+
+# 9. Attach the estimates back to your original data frame
+#    (re‐align if you dropped NAs)
+loans$pd_estimate <- NA
+loans$pd_estimate[ as.numeric(rownames(model_data)) ] <- pd_all
+
+# 10. Quick check
+head(loans[ , c("loan_amount","term","interest_rate","grade","pd_estimate") ])
+```
+
+```{r}
+hist(loans$pd_estimate)
+```
