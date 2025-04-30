@@ -7,6 +7,7 @@ library(zoo)
 library(knitr)
 library(mice)
 library(kableExtra)
+library(viridis)
 ```
 
 ```{r data-cleaning}
@@ -242,58 +243,22 @@ kbl(lasso_sig_df, digits = 4, booktabs = T) |>
 
 ```{r}
 loans_filtered |> 
-  group_by(disbursement_method) |> 
-  summarize(mean_interest = mean(interest_rate),
-            count = n())
-
-table(loans_filtered$loan_status)
+  group_by(grade) |> 
+  summarize(count = n()) |> 
+  ggplot(aes(x = grade, y = count, fill = grade)) + 
+  geom_col() +
+  geom_text(aes(label = count), vjust = -0.3, size = 4) +
+  scale_fill_viridis_d() +
+  labs(x = "Grade", y = "Count", title = "Distribution of Loans by Grade") +
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
 
 ```{r}
-# 2. Create a binary default flag
-loans$default <- ifelse(loans$loan_status == "Charged Off", 1, 0)
-
-# 3. Select a handful of predictors
-#    (you can expand this list as you like)
-vars <- c("loan_amount",
-          "term",
-          "interest_rate",
-          "annual_income",
-          "debt_to_income",
-          "grade")
-
-model_data <- loans[ , c(vars, "default")]
-
-# 4. Clean / factor any categorical variables
-model_data$grade <- factor(model_data$grade)
-
-# 5. (Optional) Drop rows with NAs in these cols
-model_data <- na.omit(model_data)
-
-# 6. Split into training and test sets
-set.seed(42)
-train_ix <- sample(seq_len(nrow(model_data)), size = 0.7 * nrow(model_data))
-train_df <- model_data[train_ix, ]
-test_df  <- model_data[-train_ix, ]
-
-# 7. Fit a logistic‐regression model
-fit <- glm(default ~ ., 
-           data   = train_df, 
-           family = binomial(link = "logit"))
-
-# 8. Predict default probability on *all* loans
-#    (you can use model_data, or the full 'loans' if you want NAs back in)
-pd_all <- predict(fit, newdata = model_data, type = "response")
-
-# 9. Attach the estimates back to your original data frame
-#    (re‐align if you dropped NAs)
-loans$pd_estimate <- NA
-loans$pd_estimate[ as.numeric(rownames(model_data)) ] <- pd_all
-
-# 10. Quick check
-head(loans[ , c("loan_amount","term","interest_rate","grade","pd_estimate") ])
-```
-
-```{r}
-hist(loans$pd_estimate)
+ggplot(loans_filtered, aes(x = grade, y = loan_amount, fill = grade)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  scale_fill_viridis_d() +
+  labs(x = "Grade", y = "Loan Amount", title = "Loan Amount Distribution by Grade") +
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
