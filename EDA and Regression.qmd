@@ -81,26 +81,44 @@ sum(is.na(loans_filtered))
 write.csv(loans_filtered, "loans_filtered.csv")
 ```
 
-```{r}
-0.3 * loans_filtered$interest_rate
-```
-
 ```{r debt-income-interest-rate}
-ggplot(loans, aes(x = debt_to_income, y = interest_rate, color = grade)) +
+ggplot(loans_filtered, aes(x = debt_to_income_final, y = interest_rate, 
+                           color = grade)) +
   geom_point() +
   labs(x = "Debt to Income Ratio",
        y = "Loan Interest Rate (%)",
-       title = "Loan Interest Rate vs. Loanee Debt to Income Ratio",
-       subtitle = "By Loan Grade")
+       color = "Grade", 
+       title = "Loan Interest Rate vs. Borrower Debt-to-Income Ratio",
+       subtitle = "By Loan Grade & Application Type") + 
+  facet_wrap(~application_type) + 
+  scale_color_viridis_d() + 
+  theme_minimal()
 ```
 
 ```{r loan-grade-purposes}
-ggplot(loans, aes(x = grade, fill = loan_purpose)) +
+ggplot(loans_filtered, aes(x = grade, fill = loan_purpose)) +
   geom_bar(position = "fill") +
   labs(x = "Loan Grade",
        y = "Proportion",
        title = "Distribution of Loan Purposes",
-       subtitle = "by Loan Grade")
+       subtitle = "by Loan Grade",
+       fill = "Loan Purpose") + 
+  scale_fill_manual(values = scales::hue_pal()(length(levels(loans$loan_purpose))),
+                    labels = c(
+                      "car" = "Car",
+                      "credit_card" = "Credit Card",
+                      "debt_consolidation" = "Debt Consolidation",
+                      "home_improvement" = "Home Improvement",
+                      "house" = "House",
+                      "major_purchase" = "Major Purchase",
+                      "medical" = "Medical",
+                      "moving" = "Moving",
+                      "other" = "Other",
+                      "renewable_energy" = "Renewable Energy",
+                      "small_business" = "Small Business",
+                      "vacation" = "Vacation"
+                    )) + 
+  theme_minimal()
 ```
 
 ```{r interest-rates-by-grade}
